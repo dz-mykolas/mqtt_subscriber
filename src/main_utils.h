@@ -1,6 +1,7 @@
 #include <mosquitto.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <cjson/cJSON.h>
 
 #include "uci_utils.h"
 

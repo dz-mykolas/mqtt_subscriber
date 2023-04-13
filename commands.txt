@@ -1,0 +1,4 @@
+journalctl -f _COMM=mqtt_subscriber
+sudo systemctl stop mosquitto
+mosquitto_pub -t home/living_room/tv -m '{"name":  "outdoor thermometer", "id": "thermo_12", "data": {"temp": 20, "humidity": 60}}'
+valgrind --leak-check=full ./mqtt_subscriber

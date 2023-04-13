@@ -3,13 +3,18 @@
 int main() 
 {
     log_event(LOG_EVENT_NOTICE, "Program Starting!");
-    
+
     int run = 1;
     int id = 7;
     int rc;
+    struct topic *topics_list = NULL;
+    utils_get_data(&topics_list);
+
     mosquitto_lib_init();
     struct mosquitto *mosq_client;
     mosq_client = mosquitto_new("test_client", true, &id);
+    
+    mosquitto_user_data_set(mosq_client, topics_list);
     mosquitto_connect_callback_set(mosq_client, on_connect);
     mosquitto_message_callback_set(mosq_client, on_message);
 
@@ -36,5 +41,6 @@ int main()
     mosquitto_destroy(mosq_client);
     mosquitto_lib_cleanup();
     log_event(LOG_EVENT_NOTICE, "Program Finished!");
+    llist_remove_all(&topics_list);
     return 0;
 }
