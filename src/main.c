@@ -2,7 +2,7 @@
 
 int main() 
 {
-    log_event(LOG_EVENT_NOTICE, "Program Starting!");
+    log_event(LOG_EVENT_WARNING, "Program Starting!");
 
     int run = 1;
     int id = 7;
@@ -40,7 +40,7 @@ int main()
     mosquitto_disconnect(mosq_client);
     mosquitto_destroy(mosq_client);
     mosquitto_lib_cleanup();
-    log_event(LOG_EVENT_NOTICE, "Program Finished!");
+    log_event(LOG_EVENT_WARNING, "Program Finished!");
     llist_remove_all(&topics_list);
     return 0;
 }
