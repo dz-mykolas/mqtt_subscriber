@@ -3,6 +3,6 @@
 #include <curl/curl.h>
 
 struct email_payload {
-    int lines_read;
-    const char **recipients;
+	int lines_read;
+	const char **recipients;
 };

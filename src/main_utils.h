@@ -7,3 +7,5 @@
 
 void on_connect(struct mosquitto *mosq, void *obj, int rc);
 void on_message(struct mosquitto *mosq, void *obj, const struct mosquitto_message *msg);
+
+struct topic *confirm_data(cJSON *data, struct topic *tpc, char *topic);
