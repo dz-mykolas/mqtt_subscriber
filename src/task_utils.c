@@ -1,5 +1,21 @@
 #include "task_utils.h"
 
+void print_events(struct topic *tpc)
+{
+	if (tpc->event_count > 0) {
+		log_event(LOG_EVENT_NOTICE, "%10s", "Events");
+		struct event evt;
+		FOR_EACH_EVENT(tpc->events, evt)
+		{
+			char *event_param = evt.param;
+			char *event_sym	  = evt.comp_sym;
+			log_event(LOG_EVENT_NOTICE, "%14s %s %s", "event:", event_param, event_sym);
+		}
+	} else {
+		log_event(LOG_EVENT_NOTICE, "%13s", "No events");
+	}
+}
+
 void log_event(int type, const char *format, ...)
 {
 	setlogmask(LOG_UPTO(LOG_NOTICE));
@@ -15,6 +31,17 @@ void log_event(int type, const char *format, ...)
 	closelog();
 }
 
+struct event_node *create_events_node(struct event evt)
+{
+	struct event_node *n = (struct event_node *)malloc(sizeof(struct event_node));
+	if (n == NULL)
+		return NULL;
+	n->count     = 1;
+	n->events[0] = evt;
+	n->next	     = NULL;
+	return n;
+}
+
 struct topic *create_node(char *topic_name, int qos)
 {
 	struct topic *t = (struct topic *)malloc(sizeof(struct topic));
@@ -24,7 +51,6 @@ struct topic *create_node(char *topic_name, int qos)
 	t->qos	       = qos;
 	t->next	       = NULL;
 	t->events      = NULL;
-	t->max_events  = 10;
 	t->event_count = 0;
 	return t;
 }
@@ -42,32 +68,60 @@ void llist_add_end(struct topic **list, struct topic *t)
 	temp->next = t;
 }
 
-void llist_remove_all(struct topic **list)
+void event_list_remove_all(struct event_node **list)
 {
-	struct topic *head = *list;
-	while (head != NULL) {
-		struct topic *temp;
-		temp = head;
-		head = head->next;
-		if (temp->events != NULL)
-			free(temp->events);
-		free(temp);
+	struct event_node *head	    = *list;
+	struct event_node *previous = NULL;
+	FOR_EACH_NODE(head)
+	{
+		if (previous)
+			free(previous);
+		previous = head;
 	}
+	if (previous)
+		free(previous);
 	*list = NULL;
 }
 
-int llist_add_event(struct topic *t, struct event e)
+void topic_list_remove_all(struct topic **list)
 {
-	if (t->event_count >= t->max_events)
+	struct topic *head     = *list;
+	struct topic *previous = NULL;
+	FOR_EACH_NODE(head)
+	{
+		if (head->events != NULL)
+			event_list_remove_all(&(head->events));
+		if (previous)
+			free(previous);
+		previous = head;
+	}
+	if (previous)
+		free(previous);
+	*list = NULL;
+}
+
+int ullist_event_add_end(struct topic *t, struct event e)
+{
+	if (t->event_count >= MAX_EVENTS)
 		return -1;
 
-	if (t->events == NULL) {
-		t->events = (struct event *)calloc(t->max_events, sizeof(struct event));
-		if (t->events == NULL)
-			return -2;
+	struct event_node *n = t->events;
+	if (t->event_count == 0) {
+		n = create_events_node(e);
+	} else {
+		struct event_node *temp = n;
+		while (temp->next != NULL)
+			temp = temp->next;
+
+		if (temp->count < MAX_EVENTS_NODE) {
+			temp->events[temp->count] = e;
+			temp->count++;
+		} else {
+			temp->next = create_events_node(e);
+		}
 	}
 
-	t->events[t->event_count] = e;
+	t->events = n;
 	t->event_count++;
 	return 0;
 }
@@ -75,11 +129,10 @@ int llist_add_event(struct topic *t, struct event e)
 struct topic *find_topic(struct topic *topics_list, char *topic_name)
 {
 	struct topic *temp = topics_list;
-	while (temp != NULL) {
-		if (strcmp(temp->name, topic_name) == 0) {
+	FOR_EACH_NODE(temp)
+	{
+		if (strcmp(temp->name, topic_name) == 0)
 			return temp;
-		}
-		temp = temp->next;
 	}
 	return NULL;
 }
@@ -146,18 +199,20 @@ void send_mail()
 
 void send_event(cJSON *param, struct topic *tpc)
 {
-	for (int i = 0; i < tpc->event_count; i++) {
-		char *event_param  = tpc->events[i].param;
-		int event_type	   = tpc->events[i].type;
-		double event_num   = tpc->events[i].ref_num;
-		char *event_string = tpc->events[i].ref_string;
-		char *comparator   = tpc->events[i].comp_sym;
+	struct event curr;
+	FOR_EACH_EVENT(tpc->events, curr)
+	{
+		char *event_param  = curr.param;
+		int event_type	   = curr.type;
+		double event_num   = curr.ref_num;
+		char *event_string = curr.ref_string;
+		char *comparator   = curr.comp_sym;
 		char *json_param   = param->string;
 		int json_type	   = param->type;
 
-		if (strcmp(event_param, json_param) != 0)
+		if (strcmp(event_param, json_param) != 0) {
 			continue;
-		else if (event_type == TYPE_NUMERIC && json_type == cJSON_Number) {
+		} else if (event_type == TYPE_NUMERIC && json_type == cJSON_Number) {
 			if (compare_numeric(comparator, param->valuedouble, event_num))
 				send_mail();
 		} else if (event_type == TYPE_ALPHANUMERIC && json_type == cJSON_String) {

@@ -99,7 +99,7 @@ int create_event_from_section_helper(struct event *evt, struct topic **tpc, stru
 		// Can replace with hash table to loop once O(n) and then O(1) check if it exists
 		*tpc = find_topic(*tpc, o->v.string);
 		if (!(*tpc)) {
-            log_event(LOG_WARNING, "CFG/EVENT: Could not find topic for event");
+            log_event(LOG_WARNING, "CFG/EVENT: Could not find topic for event: %s", o->v.string);
             return 1;
         }
 		snprintf(evt->topic_name, MAX_TOPIC_L, "%s", o->v.string);
@@ -177,8 +177,9 @@ int utils_get_events(struct topic **topics_list)
 		if (strcmp(section->type, "event") == 0) {
 			struct topic *tpc = *topics_list;
 			struct event evt  = create_event_from_section(&tpc, section);
-			if (evt.topic_name[0] != '\0')
-				llist_add_event(tpc, evt);
+			if (evt.topic_name[0] != '\0') {
+				ullist_event_add_end(tpc, evt);
+            }
 		}
 	}
 	uci_free_context(ctx);
@@ -189,4 +190,5 @@ int utils_get_data(struct topic **topics_list)
 {
 	utils_get_topics(topics_list);
 	utils_get_events(topics_list);
+    return 0;
 }
