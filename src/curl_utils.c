@@ -1,53 +1,69 @@
-// #include "curl_utils.h"
+#include "curl_utils.h"
 
-// static size_t payload_source(void *ptr, size_t size, size_t nmemb, void *userp) {
-//     struct email_payload *payload = (struct email_payload *)userp;
-//     const char **recipients = payload->recipients;
+int send_mail(struct event evt, struct email_node *eml, char *ref_value)
+{
+	CURL *curl;
+	CURLcode err_curl;
+	struct curl_slist *recipients = NULL;
 
-//     char *formatted_recipients = NULL;
-//     size_t total_len = 0;
+	char *sender	    = eml->sender;
+	char *smtp_username = eml->smtp_username;
+	char *smtp_userpass = eml->smtp_userpass;
+	char *smtp_ip	    = eml->smtp_ip;
+	int smtp_port	    = eml->smtp_port;
+	char *event_topic   = evt.topic_name;
+	char smtp_url[128];
+	int ref_len = strlen(ref_value);
+	snprintf(smtp_url, 128, "smtps://%s:%d", smtp_ip, smtp_port);
 
-//     while (*recipients) {
-//         const char *to = "To: ";
-//         size_t len = strlen(to) + strlen(*recipients) + strlen("\r\n");
-//         total_len += len;
+    if (evt.recipient_count < 1) {
+        log_event(LOG_WARNING, "MSG: No recipients");
+        return 1;
+    }
+	for (int i = 0; i < evt.recipient_count; i++)
+		recipients = curl_slist_append(recipients, evt.recipients[i]);
 
-//         if (formatted_recipients == NULL) {
-//             formatted_recipients = malloc(len + 1);
-//             snprintf(formatted_recipients, len + 1, "%s%s\r\n", to, *recipients);
-//         } else {
-//             formatted_recipients = realloc(formatted_recipients, total_len + 1);
-//             snprintf(formatted_recipients + total_len - len, len + 1, "%s%s\r\n", to, *recipients);
-//         }
+	curl = curl_easy_init();
+	if (!curl) {
+		log_event(LOG_EVENT_ERROR, "Could not initialize curl object");
+		return 1;
+	}
 
-//         recipients++;
-//     }
+	curl_mime *mime;
+	curl_mimepart *part;
 
-//     const char *data_template[] = {
-//         "Date: Mon, 29 Jul 2023 09:26:29 +0200\r\n",
-//         formatted_recipients,
-//         "From: sender@example.com\r\n",
-//         "Subject: Test email using libcurl in C\r\n",
-//         "\r\n", /* empty line to divide headers from the body */
-//         "This is the body of the email.\r\n",
-//         NULL
-//     };
+    /* Header */
+    struct curl_slist *headers = NULL;
+    char header_text[MAX_SUBJECT_SIZE];
+    snprintf(header_text, sizeof(header_text), "Subject: %s", event_topic);
+    headers = curl_slist_append(headers, header_text);
+    
+	/* Payload */
+    char payload_text[MAX_PAYLOAD_SIZE];
+    snprintf(payload_text, sizeof(payload_text), "%.*s", ref_len,
+            ref_value);
+    mime = curl_mime_init(curl);
+	part = curl_mime_addpart(mime);
+	curl_mime_data(part, payload_text, CURL_ZERO_TERMINATED);
+	curl_mime_type(part, "text/plain");
+	curl_mime_encoder(part, "7bit");
+	curl_mime_headers(part, curl_slist_append(NULL, "Content-Disposition: inline"), 1);
 
-//     const char *payload_data;
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+	curl_easy_setopt(curl, CURLOPT_USERNAME, smtp_username);
+	curl_easy_setopt(curl, CURLOPT_PASSWORD, smtp_userpass);
+	curl_easy_setopt(curl, CURLOPT_URL, smtp_url);
+	curl_easy_setopt(curl, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
+	curl_easy_setopt(curl, CURLOPT_MAIL_FROM, sender);
+	curl_easy_setopt(curl, CURLOPT_MAIL_RCPT, recipients);
+	curl_easy_setopt(curl, CURLOPT_MIMEPOST, mime);
 
-//     if ((size == 0) || (nmemb == 0) || ((size * nmemb) < 1)) {
-//         return 0;
-//     }
-
-//     payload_data = data_template[payload->lines_read];
-
-//     if (payload_data) {
-//         size_t len = strlen(payload_data);
-//         memcpy(ptr, payload_data, len);
-//         payload->lines_read++;
-//         return len;
-//     }
-
-//     free(formatted_recipients);
-//     return 0;
-// }
+	err_curl = curl_easy_perform(curl);
+	if (err_curl != CURLE_OK)
+		log_event(LOG_EVENT_ERROR, "Failed to send a message: %s\n", curl_easy_strerror(err_curl));
+	log_event(LOG_EVENT_ERROR, "Sent a message");
+	curl_slist_free_all(recipients);
+	curl_mime_free(mime);
+	curl_easy_cleanup(curl);
+	return 0;
+}

@@ -1,5 +1,24 @@
 #include "uci_utils.h"
 
+email_options convert_email_options(char *option)
+{
+	if (strcmp(option, "name") == 0) {
+		return EMAIL_NAME;
+	} else if (strcmp(option, "smtp_ip") == 0) {
+		return EMAIL_SMTP_IP;
+	} else if (strcmp(option, "smtp_port") == 0) {
+		return EMAIL_SMTP_PORT;
+	} else if (strcmp(option, "username") == 0) {
+		return EMAIL_USERNAME;
+	} else if (strcmp(option, "password") == 0) {
+		return EMAIL_PASSWORD;
+	} else if (strcmp(option, "senderemail") == 0) {
+		return EMAIL_SENDEREMAIL;
+	} else {
+		return -1;
+	}
+}
+
 topic_options convert_topic_options(char *option)
 {
 	if (strcmp(option, "name") == 0) {
@@ -46,6 +65,67 @@ int utils_load_config(char *cfg, struct uci_context **ctx, struct uci_package **
 		return UCI_ERR_NOTFOUND;
 	}
 	return UCI_OK;
+}
+
+struct email_node *create_email_from_section(struct uci_section *section)
+{
+	char configured_name[32] = "";
+    char smtp_username[32] = "";
+    char smtp_password[64] = "";
+	char smtp_ip[64]  = "";
+    char sender[64] = "";
+    int smtp_port = -1;
+
+	struct uci_element *opts;
+	uci_foreach_element (&section->options, opts) {
+		struct uci_option *o = uci_to_option(opts);
+		switch (convert_email_options(o->e.name)) {
+		case EMAIL_NAME:
+			snprintf(configured_name, 32, "%s", o->v.string);
+			break;
+		case EMAIL_SMTP_IP:
+			snprintf(smtp_ip, 64, "%s", o->v.string);
+			break;
+		case EMAIL_SMTP_PORT:
+			smtp_port = atoi(o->v.string);
+			break;
+		case EMAIL_USERNAME:
+			snprintf(smtp_username, 32, "%s", o->v.string);
+			break;
+		case EMAIL_PASSWORD:
+			snprintf(smtp_password, 64, "%s", o->v.string);
+			break;
+		case EMAIL_SENDEREMAIL:
+			snprintf(sender, 64, "%s", o->v.string);
+			break;
+		}
+	}
+
+	if (strcmp(configured_name, "") == 0 || smtp_port < 0)
+		return NULL;
+	return create_email_node(configured_name, smtp_username, smtp_password, smtp_ip, smtp_port, sender);
+}
+
+int utils_get_available_emails(struct email_node **list)
+{
+	struct uci_context *ctx;
+	struct uci_package *pkg;
+	struct uci_element *sct;
+	if (utils_load_config("user_groups.dddd", &ctx, &pkg) == 1)
+		return 1;
+
+	uci_foreach_element (&pkg->sections, sct) {
+		struct uci_section *section = uci_to_section(sct);
+		if (strcmp(section->type, "email") == 0) {
+			struct email_node *eml = create_email_from_section(section);
+			if (eml)
+				llist_add_email_end(list, eml);
+			else
+				log_event(LOG_WARNING, "CFG/USER_GROUPS: Could not create email");
+		}
+	}
+	uci_free_context(ctx);
+	return 0;
 }
 
 struct topic *create_topic_from_section(struct uci_section *section)
@@ -99,9 +179,9 @@ int create_event_from_section_helper(struct event *evt, struct topic **tpc, stru
 		// Can replace with hash table to loop once O(n) and then O(1) check if it exists
 		*tpc = find_topic(*tpc, o->v.string);
 		if (!(*tpc)) {
-            log_event(LOG_WARNING, "CFG/EVENT: Could not find topic for event: %s", o->v.string);
-            return 1;
-        }
+			log_event(LOG_WARNING, "CFG/EVENT: Could not find topic for event: %s", o->v.string);
+			return 1;
+		}
 		snprintf(evt->topic_name, MAX_TOPIC_L, "%s", o->v.string);
 		return 0;
 	case EVENT_COMPARISON_TYPE:
@@ -116,9 +196,9 @@ int create_event_from_section_helper(struct event *evt, struct topic **tpc, stru
 		return 0;
 	case EVENT_COMPARATOR:
 		if (convert_comparator(o->v.string) == -1) {
-            log_event(LOG_WARNING, "CFG/EVENT: Wrong event comparator");
-            return 1;
-        }
+			log_event(LOG_WARNING, "CFG/EVENT: Wrong event comparator");
+			return 1;
+		}
 		snprintf(evt->comp_sym, 3, "%s", o->v.string);
 		return 0;
 	case EVENT_REF_VALUE:
@@ -135,7 +215,7 @@ int create_event_from_section_helper(struct event *evt, struct topic **tpc, stru
 			struct uci_element *list_e;
 			evt->recipient_count = 0;
 			uci_foreach_element (&o->v.list, list_e) {
-				snprintf(evt->recipient[evt->recipient_count], 100, "%s", list_e->name);
+				snprintf(evt->recipients[evt->recipient_count], 100, "%s", list_e->name);
 				evt->recipient_count++;
 			}
 		} else {
@@ -179,7 +259,7 @@ int utils_get_events(struct topic **topics_list)
 			struct event evt  = create_event_from_section(&tpc, section);
 			if (evt.topic_name[0] != '\0') {
 				ullist_event_add_end(tpc, evt);
-            }
+			}
 		}
 	}
 	uci_free_context(ctx);
@@ -190,5 +270,5 @@ int utils_get_data(struct topic **topics_list)
 {
 	utils_get_topics(topics_list);
 	utils_get_events(topics_list);
-    return 0;
+	return 0;
 }

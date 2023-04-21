@@ -55,6 +55,35 @@ struct topic *create_node(char *topic_name, int qos)
 	return t;
 }
 
+struct email_node *create_email_node(char *configured_name, char *smtp_username, char *smtp_userpass,
+				     char *smtp_ip, int smtp_port, char *sender)
+{
+	struct email_node *e = (struct email_node *)malloc(sizeof(struct email_node));
+	if (e == NULL)
+		return NULL;
+	strcpy(e->configured_name, configured_name);
+	strcpy(e->smtp_username, smtp_username);
+	strcpy(e->smtp_userpass, smtp_userpass);
+	strcpy(e->smtp_ip, smtp_ip);
+	strcpy(e->sender, sender);
+	e->smtp_port = smtp_port;
+	e->next	     = NULL;
+	return e;
+}
+
+void llist_add_email_end(struct email_node **list, struct email_node *e)
+{
+	struct email_node *temp = *list;
+	if (temp == NULL) {
+		*list = e;
+		return;
+	}
+
+	while (temp->next != NULL)
+		temp = temp->next;
+	temp->next = e;
+}
+
 void llist_add_end(struct topic **list, struct topic *t)
 {
 	struct topic *temp = *list;
@@ -192,32 +221,11 @@ bool compare_alphanumeric(char *comparator, char *value, char *ref)
 	}
 }
 
-void send_mail()
+struct email_node *find_email(struct email_node *eml, char *sender)
 {
-    
-}
-
-void send_event(cJSON *param, struct topic *tpc)
-{
-	struct event curr;
-	FOR_EACH_EVENT(tpc->events, curr)
-	{
-		char *event_param  = curr.param;
-		int event_type	   = curr.type;
-		double event_num   = curr.ref_num;
-		char *event_string = curr.ref_string;
-		char *comparator   = curr.comp_sym;
-		char *json_param   = param->string;
-		int json_type	   = param->type;
-
-		if (strcmp(event_param, json_param) != 0) {
-			continue;
-		} else if (event_type == TYPE_NUMERIC && json_type == cJSON_Number) {
-			if (compare_numeric(comparator, param->valuedouble, event_num))
-				send_mail();
-		} else if (event_type == TYPE_ALPHANUMERIC && json_type == cJSON_String) {
-			if (compare_alphanumeric(comparator, param->valuestring, event_string))
-				send_mail();
-		}
-	}
+    FOR_EACH_NODE(eml) {
+        if (strcmp(eml->configured_name, sender) == 0)
+            return eml;
+    }
+    return NULL;
 }

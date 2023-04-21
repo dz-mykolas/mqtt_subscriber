@@ -9,7 +9,7 @@ include $(INCLUDE_DIR)/package.mk
 define Package/mqtt_subscriber
 	CATEGORY:=Base system
 	TITLE:=mqtt_subscriber
-	DEPENDS:=libmosquitto libuci
+	DEPENDS:=libmosquitto libuci libcurl
 endef
 
 define Package/mqtt_subscriber/description
