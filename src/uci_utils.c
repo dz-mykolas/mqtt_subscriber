@@ -56,9 +56,9 @@ int utils_load_config(char *cfg, struct uci_context **ctx, struct uci_package **
 	*ctx = uci_alloc_context();
 	if (!(*ctx))
 		return UCI_ERR_MEM;
-	uci_set_confdir(
+	/* uci_set_confdir(
 		*ctx,
-		"/home/studentas/Documents/RUTXXX_R_GPL/openwrt-gpl-ipq40xx-generic.Linux-x86_64/package/mqtt_subscriber/files/");
+		"/home/studentas/Documents/RUTXXX_R_GPL/openwrt-gpl-ipq40xx-generic.Linux-x86_64/package/mqtt_subscriber/files/"); */
 	if (uci_load(*ctx, cfg, pkg) != UCI_OK) {
 		log_event(LOG_EVENT_ERROR, "CFG: Failed to load config file: %s", cfg);
 		uci_free_context(*ctx);
@@ -70,11 +70,11 @@ int utils_load_config(char *cfg, struct uci_context **ctx, struct uci_package **
 struct email_node *create_email_from_section(struct uci_section *section)
 {
 	char configured_name[32] = "";
-    char smtp_username[32] = "";
-    char smtp_password[64] = "";
-	char smtp_ip[64]  = "";
-    char sender[64] = "";
-    int smtp_port = -1;
+	char smtp_username[32]	 = "";
+	char smtp_password[64]	 = "";
+	char smtp_ip[64]	 = "";
+	char sender[64]		 = "";
+	int smtp_port		 = -1;
 
 	struct uci_element *opts;
 	uci_foreach_element (&section->options, opts) {
@@ -156,7 +156,7 @@ int utils_get_topics(struct topic **topics_list)
 	struct uci_context *ctx;
 	struct uci_package *pkg;
 	struct uci_element *sct;
-	if (utils_load_config("mqtt_subscriber_topics.config", &ctx, &pkg) != UCI_OK)
+	if (utils_load_config("mqtt_subscriber_topics", &ctx, &pkg) != UCI_OK)
 		return 1;
 	uci_foreach_element (&pkg->sections, sct) {
 		struct uci_section *section = uci_to_section(sct);
@@ -249,7 +249,7 @@ int utils_get_events(struct topic **topics_list)
 	struct uci_context *ctx;
 	struct uci_package *pkg;
 	struct uci_element *sct;
-	if (utils_load_config("mqtt_subscriber_events.config", &ctx, &pkg) == 1)
+	if (utils_load_config("mqtt_subscriber_events", &ctx, &pkg) == 1)
 		return 1;
 
 	uci_foreach_element (&pkg->sections, sct) {

@@ -2,7 +2,7 @@ BIN:=mqtt_subscriber
 SRC:=$(wildcard *.c)
 OBJ:=$(SRC:.c=.o)
 CPPFLAGS:=
-LDFLAGS:=-lmosquitto -luci -lcurl
+LDFLAGS:=-lmosquitto -luci -lcurl -largp
 
 .PHONY: all clean $(BIN)
 
