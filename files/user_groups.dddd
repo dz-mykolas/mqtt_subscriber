@@ -1,0 +1,9 @@
+config email
+	option name 'dz_mykolas'
+	option secure_conn '1'
+	option smtp_ip 'smtp.gmail.com'
+	option smtp_port '465'
+	option credentials '1'
+	option username 'emailgoogle'
+	option password 'googleapipassword'
+	option senderemail 'emailgoogle'
