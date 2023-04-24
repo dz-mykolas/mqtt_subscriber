@@ -185,7 +185,7 @@ comparison_operator convert_comparator(char *param)
 	}
 }
 
-bool compare_numeric(char *comparator, double value, double ref)
+int compare_numeric(char *comparator, double value, double ref)
 {
 	switch (convert_comparator(comparator)) {
 	case COMPARATOR_LESS:
@@ -201,11 +201,11 @@ bool compare_numeric(char *comparator, double value, double ref)
 	case COMPARATOR_MORE_EQUAL:
 		return value >= ref;
 	default:
-		return false;
+		return 0;
 	}
 }
 
-bool compare_alphanumeric(char *comparator, char *value, char *ref)
+int compare_alphanumeric(char *comparator, char *value, char *ref)
 {
 	switch (convert_comparator(comparator)) {
 	//case COMPARATOR_LESS: return strcmp(value, ref) < 0;
@@ -217,7 +217,7 @@ bool compare_alphanumeric(char *comparator, char *value, char *ref)
 	//case COMPARATOR_LESS_EQUAL: return strcmp(value, ref) <= 0;
 	//case COMPARATOR_MORE_EQUAL: return strcmp(value, ref) >= 0;
 	default:
-		return false;
+		return 0;
 	}
 }
 

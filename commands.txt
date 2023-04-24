@@ -1,4 +1,5 @@
 journalctl -f _COMM=mqtt_subscriber
 sudo systemctl stop mosquitto
 mosquitto_pub -t home/living_room/tv -m '{"name":  "outdoor thermometer", "id": "thermo_12", "data": {"temp": 20, "humidity": 60}}'
+mosquitto_pub -h 192.168.1.1 -t home/living_room/tv -m '{"name":  "outdoor thermometer", "id": "thermo_12", "data": {"temp": "medium", "humidity": 60}}' -p 8883 --cafile ca.cert.pem --cert client.cert.pem --key client.key.pem
 valgrind --leak-check=full ./mqtt_subscriber

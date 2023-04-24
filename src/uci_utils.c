@@ -56,7 +56,7 @@ int utils_load_config(char *cfg, struct uci_context **ctx, struct uci_package **
 	*ctx = uci_alloc_context();
 	if (!(*ctx))
 		return UCI_ERR_MEM;
-	/* uci_set_confdir(
+	/* uci_set_confdir(     // for testing on PC
 		*ctx,
 		"/home/studentas/Documents/RUTXXX_R_GPL/openwrt-gpl-ipq40xx-generic.Linux-x86_64/package/mqtt_subscriber/files/"); */
 	if (uci_load(*ctx, cfg, pkg) != UCI_OK) {
@@ -111,7 +111,7 @@ int utils_get_available_emails(struct email_node **list)
 	struct uci_context *ctx;
 	struct uci_package *pkg;
 	struct uci_element *sct;
-	if (utils_load_config("user_groups.dddd", &ctx, &pkg) == 1)
+	if (utils_load_config("user_groups", &ctx, &pkg) == 1)
 		return 1;
 
 	uci_foreach_element (&pkg->sections, sct) {

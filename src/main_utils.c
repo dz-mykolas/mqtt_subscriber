@@ -8,10 +8,78 @@ static char args_doc[]		     = "product_id device_id device_secret";
 static struct argp_option options[]  = { { 0 } };
 static struct argp argp		     = { options, parse_opt, args_doc, "MQTT Subscriber" };
 
+int main_init_mosquitto(struct mosquitto **mosq_client, int argc, char **argv)
+{
+	/* ARGUMENT PARSING */
+	struct arguments arguments = { 0 };
+	argp_parse(&argp, argc, argv, 0, 0, &arguments);
+	char *host     = argv[1];
+	int port       = atoi(argv[2]);
+	int tls	       = atoi(argv[3]);
+	char *username = argv[4];
+	char *password = argv[5];
+
+	int id = 7;
+	int rc = 1;
+	rc     = mosquitto_lib_init();
+
+	if (!port) {
+		log_event(LOG_EVENT_ERROR, "MAIN/INIT: Could not parse port");
+		return rc;
+	}
+
+	if (rc != MOSQ_ERR_SUCCESS) {
+		log_event(LOG_EVENT_ERROR, "Mosquitto: Could not initialize library. Return Code: %s",
+			  mosquitto_strerror(rc));
+		return rc;
+	}
+
+	*mosq_client = mosquitto_new("test_subscriber", true, &id);
+	if (!(*mosq_client)) {
+		log_event(LOG_EVENT_ERROR, "Mosquitto: Could not create Mosquitto object. Return Code: %d",
+			  errno);
+		mosquitto_lib_cleanup();
+		return errno;
+	}
+
+	if (strcmp(username, "") != 0 && strcmp(password, "") != 0) {
+		rc = mosquitto_username_pw_set(*mosq_client, username, password);
+		if (rc != MOSQ_ERR_SUCCESS) {
+			log_event(LOG_EVENT_ERROR, "Mosquitto: Unable to set username and/or password: %s",
+				  mosquitto_strerror(rc));
+			goto cleanup_client;
+		}
+	}
+
+	if (tls) {
+		rc = mosquitto_tls_set(*mosq_client, "/etc/certificates/ca.cert.pem", NULL,
+				       "/etc/certificates/client.cert.pem",
+				       "/etc/certificates/client.key.pem", NULL);
+		if (rc != MOSQ_ERR_SUCCESS) {
+			log_event(LOG_EVENT_ERROR, "Mosquitto: Unable to configure TLS: %s",
+				  mosquitto_strerror(rc));
+			goto cleanup_client;
+		}
+	}
+
+	rc = mosquitto_connect(*mosq_client, host, port, 10);
+	if (rc != MOSQ_ERR_SUCCESS) {
+		log_event(LOG_EVENT_ERROR, "Mosquitto: Could not establish connection to Broker: %s",
+			  mosquitto_strerror(rc));
+		goto cleanup_client;
+	}
+
+	return MAIN_SUCCESS;
+    
+cleanup_client:
+	mosquitto_destroy(*mosq_client);
+	mosquitto_lib_cleanup();
+	return rc;
+}
+
 int main_initialize_program(struct topic **topics_list, struct mosquitto **mosq_client, int argc, char **argv)
 {
-	int id = 7;
-	int rc;
+	int rc = 1;
 
 	/* SIGNAL HANDLING */
 	struct sigaction sa;
@@ -19,20 +87,6 @@ int main_initialize_program(struct topic **topics_list, struct mosquitto **mosq_
 	sa.sa_handler = sig_handler;
 	sigaction(SIGTERM, &sa, NULL);
 	sigaction(SIGINT, &sa, NULL);
-
-	/* ARGUMENT PARSING */
-	struct arguments arguments = { 0 };
-	argp_parse(&argp, argc, argv, 0, 0, &arguments);
-	char *host     = argv[1];
-	int port       = atoi(argv[2]);
-	int tls	       = atoi(argv[3]);
-    char *username = argv[4];
-	char *password = argv[5];
-
-	if (!port) {
-		log_event(LOG_EVENT_ERROR, "Could not parse port");
-		return 1;
-	}
 
 	/* CURL INIT */
 	CURLcode err_curl = curl_global_init(CURL_GLOBAL_DEFAULT);
@@ -42,49 +96,9 @@ int main_initialize_program(struct topic **topics_list, struct mosquitto **mosq_
 	}
 
 	/* MOSQUITTO INIT */
-	rc = mosquitto_lib_init();
-	if (rc != MOSQ_ERR_SUCCESS) {
-		log_event(LOG_EVENT_ERROR, "Could not initialize Mosquitto library. Return Code: %s", mosquitto_strerror(rc));
+	rc = main_init_mosquitto(mosq_client, argc, argv);
+	if (rc) {
 		curl_global_cleanup();
-		return rc;
-	}
-
-	*mosq_client = mosquitto_new("test_subscriber", true, &id);
-	if (!(*mosq_client)) {
-		log_event(LOG_EVENT_ERROR, "Could not create Mosquitto object. Return Code: %d", errno);
-		curl_global_cleanup();
-		mosquitto_lib_cleanup();
-		return errno;
-	}
-
-	if (strcmp(username, "") != 0 && strcmp(password, "") != 0) {
-		rc = mosquitto_username_pw_set(*mosq_client, username, password);
-        if (rc != MOSQ_ERR_SUCCESS) {
-            log_event(LOG_EVENT_ERROR, "Mosquitto: Unable to set username and/or password: %s", mosquitto_strerror(rc));
-            curl_global_cleanup();
-            mosquitto_destroy(*mosq_client);
-            mosquitto_lib_cleanup();
-            return rc;
-        }
-	}
-
-    if (tls) {
-        rc = mosquitto_tls_set(*mosq_client, "/path/to/ca.crt", NULL, "/path/to/client.crt", "/path/to/client.key", NULL);
-        if (rc != MOSQ_ERR_SUCCESS) {
-            log_event(LOG_EVENT_ERROR, "Mosquitto: Unable to configure TLS: %s", mosquitto_strerror(rc));
-            curl_global_cleanup();
-            mosquitto_destroy(*mosq_client);
-            mosquitto_lib_cleanup();
-            return rc;
-        }
-    }
-
-	rc = mosquitto_connect(*mosq_client, host, port, 10);
-	if (rc != MOSQ_ERR_SUCCESS) {
-		log_event(LOG_EVENT_ERROR, "Mosquitto: Could not establish connection to Broker: %s", mosquitto_strerror(rc));
-		curl_global_cleanup();
-		mosquitto_lib_cleanup();
-		mosquitto_destroy(*mosq_client);
 		return rc;
 	}
 
@@ -98,6 +112,7 @@ int main_initialize_program(struct topic **topics_list, struct mosquitto **mosq_
 }
 
 volatile sig_atomic_t running = 1;
+int connected = 0;  
 int main_loop(struct mosquitto **mosq_client)
 {
 	int run = 1;
@@ -105,16 +120,23 @@ int main_loop(struct mosquitto **mosq_client)
 
 	rc = mosquitto_loop_start(*mosq_client);
 	if (rc != MOSQ_ERR_SUCCESS) {
-		log_event(LOG_EVENT_ERROR, "Could not start mosquitto loop. Return Code: %d\n", rc);
+		log_event(LOG_EVENT_ERROR, "Could not start mosquitto loop. Return Code: %d", rc);
 		return rc;
 	}
+    time_t start_time = time(NULL);
+    int timeout_seconds = 5;
 	while (running) {
-		sleep(1);
-	}
-
+        if (!connected && (time(NULL) - start_time) >= timeout_seconds) {
+            log_event(LOG_EVENT_WARNING, "CONNACK not received within %d seconds. Disconnecting", timeout_seconds);
+            running = 0;
+            break;
+        }
+        sleep(1);
+    }
+    
 	rc = mosquitto_loop_stop(*mosq_client, true);
 	if (rc != MOSQ_ERR_SUCCESS) {
-		log_event(LOG_EVENT_ERROR, "Could not stop mosquitto loop. Return Code: %d\n", rc);
+		log_event(LOG_EVENT_ERROR, "Could not stop mosquitto loop. Return Code: %d", rc);
 		return rc;
 	}
 
@@ -129,7 +151,7 @@ int main_deinitialize_program(struct topic **topic_list, struct mosquitto **mosq
 
 	rc = mosquitto_disconnect(*mosq_client);
 	if (rc != MOSQ_ERR_SUCCESS) {
-		log_event(LOG_EVENT_ERROR, "Could not disconnect mosquitto. Return Code: %d\n", rc);
+		log_event(LOG_EVENT_ERROR, "Could not disconnect mosquitto. Return Code: %d", rc);
 		return rc;
 	}
 	mosquitto_destroy(*mosq_client);
@@ -142,12 +164,19 @@ int main_deinitialize_program(struct topic **topic_list, struct mosquitto **mosq
 
 void on_connect(struct mosquitto *mosq, void *obj, int rc)
 {
+    connected = 1;
+	log_event(LOG_EVENT_NOTICE, "Mosquitto on_connect: %s", mosquitto_connack_string(rc));
+	if (rc != 0) {
+		running = 0;
+		return;
+	}
+    
 	struct topic *tpc = (struct topic *)obj;
 	while (tpc != NULL) {
 		char *name = tpc->name;
 		int qos	   = tpc->qos;
 		if (mosquitto_subscribe(mosq, NULL, name, qos) != MOSQ_ERR_SUCCESS) {
-			log_event(LOG_EVENT_WARNING, "Could not subscribe to topic: %s", name);
+			log_event(LOG_EVENT_WARNING, "Error subscribing: %s", mosquitto_strerror(rc));
 			continue;
 		}
 		log_event(LOG_EVENT_NOTICE, "Subscribed to: %s; QoS: %d", name, qos);
@@ -161,7 +190,7 @@ void on_message(struct mosquitto *mosq, void *obj, const struct mosquitto_messag
 	char buffer[MAX_TOPIC_L];
 	char *payload = (char *)msg->payload;
 	char *topic   = msg->topic;
-	snprintf(buffer, MAX_TOPIC_L, "MSG: Message received on topic '%s': %s\n", topic, payload);
+	snprintf(buffer, MAX_TOPIC_L, "MSG: Message received on topic '%s': %s", topic, payload);
 	printf("%s\n", buffer);
 
 	cJSON *payload_json    = cJSON_Parse(payload);
@@ -197,28 +226,35 @@ void send_event(cJSON *param, struct topic *tpc, struct email_node *eml)
 	struct event curr;
 	FOR_EACH_EVENT(tpc->events, curr)
 	{
-		char *sender		  = curr.sender;
-		char *event_param	  = curr.param;
-		int event_type		  = curr.type;
-		double event_num	  = curr.ref_num;
-		char *event_string	  = curr.ref_string;
-		char *comparator	  = curr.comp_sym;
-		char *json_param	  = param->string;
-		int json_type		  = param->type;
-		struct email_node *needed = find_email(eml, sender);
+		int mail_size = 50;
+		char mail_msg[mail_size];
+		char *event_string = curr.ref_string;
+		char *json_string  = param->valuestring;
+		double json_num	   = param->valuedouble;
+		double event_num   = curr.ref_num;
 
-		if (strcmp(event_param, json_param) != 0)
+		char *sender	 = curr.sender;
+		char *comparator = curr.comp_sym;
+
+		char *event_param = curr.param;
+		char *json_param  = param->string;
+		int json_type	  = param->type;
+		int event_type	  = curr.type;
+
+		struct email_node *needed = find_email(eml, sender);
+		if (strcmp(event_param, json_param) != 0 || !needed)
 			continue;
-		if (!needed) {
-			continue;
-		}
+
+		int send = 0;
 		if (event_type == TYPE_NUMERIC && json_type == cJSON_Number) {
-			if (compare_numeric(comparator, param->valuedouble, event_num))
-				send_mail(curr, needed, "TestN");
+			send = compare_numeric(comparator, json_num, event_num);
+			snprintf(mail_msg, mail_size, "Ref: %.2f, Current: %.2f", event_num, json_num);
 		} else if (event_type == TYPE_ALPHANUMERIC && json_type == cJSON_String) {
-			if (compare_alphanumeric(comparator, param->valuestring, event_string))
-				send_mail(curr, needed, "TestA");
+			send = compare_alphanumeric(comparator, json_string, event_string);
+			snprintf(mail_msg, mail_size, "Ref: %s, Current: %s", event_string, json_string);
 		}
+		if (send)
+			send_mail(curr, needed, mail_msg);
 	}
 }
 

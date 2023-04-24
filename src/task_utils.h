@@ -75,8 +75,8 @@ struct email_node {
 void log_event(int type, const char *format, ...);
 struct topic *find_topic(struct topic *topics_list, char *topic_name);
 comparison_operator convert_comparator(char *param);
-bool compare_numeric(char *comparator, double value, double ref);
-bool compare_alphanumeric(char *comparator, char *value, char *ref);
+int compare_numeric(char *comparator, double value, double ref);
+int compare_alphanumeric(char *comparator, char *value, char *ref);
 void print_events(struct topic *tpc);
 struct email_node *find_email(struct email_node *eml, char *sender);
 

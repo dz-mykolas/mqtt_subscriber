@@ -27,6 +27,7 @@ void send_event(cJSON *param, struct topic *tpc, struct email_node *eml);
 void sig_handler(int sig);
 error_t parse_opt(int key, char *arg, struct argp_state *state);
 
+int main_init_mosquitto(struct mosquitto **mosq_client, int argc, char **argv);
 int main_initialize_program(struct topic **topics_list, struct mosquitto **mosq_client, int argc, char **argv);
 int main_loop(struct mosquitto **mosq_client);
 int main_deinitialize_program(struct topic **topics_list, struct mosquitto **mosq_client);
