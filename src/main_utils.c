@@ -238,8 +238,8 @@ void on_connect(struct mosquitto *mosq, void *obj, int rc)
 			continue;
 		}
 		/*  DEBUGGING   */
-		log_event(LOG_EVENT_NOTICE, "Subscribed to: %s; QoS: %d", name, qos);
-		print_events(tpc);
+		//log_event(LOG_EVENT_NOTICE, "Subscribed to: %s; QoS: %d", name, qos);
+		//print_events(tpc);
 		/*              */
 		tpc = tpc->next;
 	}
