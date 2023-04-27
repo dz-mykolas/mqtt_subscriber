@@ -56,7 +56,7 @@ int utils_load_config(char *cfg, struct uci_context **ctx, struct uci_package **
 	*ctx = uci_alloc_context();
 	if (!(*ctx))
 		return UCI_ERR_MEM;
-	/* uci_set_confdir(     // for testing on PC
+	/*uci_set_confdir( // for testing on PC
 		*ctx,
 		"/home/studentas/Documents/RUTXXX_R_GPL/openwrt-gpl-ipq40xx-generic.Linux-x86_64/package/mqtt_subscriber/files/"); */
 	if (uci_load(*ctx, cfg, pkg) != UCI_OK) {
@@ -268,7 +268,8 @@ int utils_get_events(struct topic **topics_list)
 
 int utils_get_data(struct topic **topics_list)
 {
-	utils_get_topics(topics_list);
+	if (utils_get_topics(topics_list) != 0)
+		return 1;
 	utils_get_events(topics_list);
 	return 0;
 }

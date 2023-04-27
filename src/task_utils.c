@@ -129,8 +129,90 @@ void topic_list_remove_all(struct topic **list)
 	*list = NULL;
 }
 
+void email_list_remove_all(struct email_node **list)
+{
+	struct email_node *head     = *list;
+	struct email_node *previous = NULL;
+	FOR_EACH_NODE(head)
+	{
+		if (previous)
+			free(previous);
+		previous = head;
+	}
+	if (previous)
+		free(previous);
+	*list = NULL;
+}
+
+unsigned long hash_djb2(unsigned char *str)
+{
+	unsigned long hash = 5381;
+	int c;
+
+	while (c = *str++)
+		hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+
+	return hash;
+}
+
+__uint64_t event_hash(struct event evt)
+{
+	__uint64_t hash = 0;
+
+	char type[2];
+
+	snprintf(type, 2, "%d", evt.type);
+	char ref_string[100];
+	if (evt.type == TYPE_NUMERIC) {
+		snprintf(ref_string, sizeof(ref_string), "%f", evt.ref_num);
+	} else
+		snprintf(ref_string, sizeof(ref_string), "%s", evt.ref_string);
+	int max_arr_size = 0;
+	int i		 = MAX_RECIPIENTS;
+	while (i > 0) {
+		max_arr_size++;
+		i /= 10;
+	}
+	char recipient_count[max_arr_size + 1];
+	snprintf(recipient_count, sizeof(recipient_count), "%d", evt.recipient_count);
+	hash += hash_djb2(evt.topic_name);
+	hash += hash_djb2(type);
+	hash += hash_djb2(evt.param);
+	hash += hash_djb2(evt.comp_sym);
+	hash += hash_djb2(ref_string);
+	hash += hash_djb2(evt.sender);
+	for (int i = 0; i < evt.recipient_count; i++) {
+		hash += hash_djb2(evt.recipients[i]);
+	}
+	hash += hash_djb2(recipient_count);
+	return hash;
+}
+
+int put_hashes(__uint64_t hashes[], int hashes_count, struct event_node *en)
+{
+	struct event evt;
+	FOR_EACH_EVENT(en, evt)
+	{
+		hashes[hashes_count] = event_hash(evt);
+		hashes_count++;
+	}
+	return hashes_count;
+}
+
+int find_duplicate(__uint64_t hashes[256], int hashes_count, struct event e)
+{
+	for (int i = 0; i < hashes_count; i++) {
+		if (hashes[i] == event_hash(e))
+			;
+		return 1;
+	}
+	return 0;
+}
+
 int ullist_event_add_end(struct topic *t, struct event e)
 {
+	__uint64_t hashes[256];
+	int hashes_count = 0;
 	if (t->event_count >= MAX_EVENTS)
 		return -1;
 
@@ -139,8 +221,15 @@ int ullist_event_add_end(struct topic *t, struct event e)
 		n = create_events_node(e);
 	} else {
 		struct event_node *temp = n;
-		while (temp->next != NULL)
-			temp = temp->next;
+		while (temp->next != NULL) {
+			hashes_count = put_hashes(hashes, hashes_count, temp);
+			temp	     = temp->next;
+		}
+
+		if (find_duplicate(hashes, hashes_count, e) == 1) {
+			log_event(LOG_EVENT_WARNING, "Duplicate event found");
+			return 1;
+		}
 
 		if (temp->count < MAX_EVENTS_NODE) {
 			temp->events[temp->count] = e;
@@ -223,9 +312,26 @@ int compare_alphanumeric(char *comparator, char *value, char *ref)
 
 struct email_node *find_email(struct email_node *eml, char *sender)
 {
-    FOR_EACH_NODE(eml) {
-        if (strcmp(eml->configured_name, sender) == 0)
-            return eml;
-    }
-    return NULL;
+	FOR_EACH_NODE(eml)
+	{
+		if (strcmp(eml->configured_name, sender) == 0)
+			return eml;
+	}
+	return NULL;
+}
+
+void get_time_string(char current_time[], int size)
+{
+	time_t rawtime;
+	struct tm *timeinfo;
+	time(&rawtime);
+	timeinfo   = localtime(&rawtime);
+	int year   = timeinfo->tm_year + 1900;
+	int month  = timeinfo->tm_mon + 1;
+	int day	   = timeinfo->tm_mday;
+	int hour   = timeinfo->tm_hour;
+	int minute = timeinfo->tm_min;
+	int second = timeinfo->tm_sec;
+
+	snprintf(current_time, size, "%04d/%02d/%02d %02d:%02d:%02d", year, month, day, hour, minute, second);
 }

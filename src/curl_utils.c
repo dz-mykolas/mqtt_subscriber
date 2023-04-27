@@ -61,7 +61,7 @@ int send_mail(struct event evt, struct email_node *eml, char *ref_value)
 	err_curl = curl_easy_perform(curl);
 	if (err_curl != CURLE_OK)
 		log_event(LOG_EVENT_ERROR, "Failed to send a message: %s\n", curl_easy_strerror(err_curl));
-	log_event(LOG_EVENT_ERROR, "Sent a message");
+	log_event(LOG_EVENT_NOTICE, "Sent a message");
 	curl_slist_free_all(recipients);
 	curl_mime_free(mime);
 	curl_easy_cleanup(curl);

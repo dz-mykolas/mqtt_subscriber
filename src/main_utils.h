@@ -5,6 +5,7 @@
 #include <curl/curl.h>
 #include <signal.h>
 #include <argp.h>
+#include <sqlite3.h>
 
 #include "uci_utils.h"
 #include "curl_utils.h"
@@ -20,14 +21,19 @@ struct arguments {
 	char *args[5];
 };
 
+struct data_pass_cb {
+    struct topic *tpc;
+    sqlite3 *db;
+};
+
 void on_connect(struct mosquitto *mosq, void *obj, int rc);
 void on_message(struct mosquitto *mosq, void *obj, const struct mosquitto_message *msg);
 struct topic *confirm_data(cJSON *data, struct topic *tpc, char *topic);
-void send_event(cJSON *param, struct topic *tpc, struct email_node *eml);
+void send_event(cJSON *param, struct topic *tpc);
 void sig_handler(int sig);
 error_t parse_opt(int key, char *arg, struct argp_state *state);
 
 int main_init_mosquitto(struct mosquitto **mosq_client, int argc, char **argv);
-int main_initialize_program(struct topic **topics_list, struct mosquitto **mosq_client, int argc, char **argv);
+int main_initialize_program(struct data_pass_cb **data, struct mosquitto **mosq_client, int argc, char **argv);
 int main_loop(struct mosquitto **mosq_client);
-int main_deinitialize_program(struct topic **topics_list, struct mosquitto **mosq_client);
+int main_deinitialize_program(struct data_pass_cb **data, struct mosquitto **mosq_client);

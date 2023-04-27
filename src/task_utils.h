@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdarg.h>
+#include <time.h>
 
 #include "cJSON.h"
 
@@ -14,10 +15,11 @@
 #define LOG_EVENT_WARNING 4
 #define LOG_EVENT_NOTICE  5
 
-#define MAX_TOPIC_L	  1024 /* 65536 MQTT max allowed */
-#define MAX_EVENTS	  16
-#define MAX_EVENTS_NODE	  4
-#define MAX_RECIPIENTS	  10
+#define MAX_TOPIC_L	1024 /* 65536 MQTT max allowed */
+#define MAX_EVENTS	16
+#define MAX_EVENTS_NODE 4
+#define MAX_RECIPIENTS	10
+#define MAX_TABLE_SIZE	128
 
 enum { TYPE_NUMERIC, TYPE_ALPHANUMERIC };
 
@@ -66,6 +68,11 @@ struct email_node {
 	struct email_node *next;
 };
 
+struct event_hash_entry {
+    char *key;
+    struct event_node *value;
+};
+
 #define FOR_EACH_NODE(_node) for (; _node != NULL; _node = _node->next)
 
 #define FOR_EACH_EVENT(_node, _event)                                                                        \
@@ -79,6 +86,7 @@ int compare_numeric(char *comparator, double value, double ref);
 int compare_alphanumeric(char *comparator, char *value, char *ref);
 void print_events(struct topic *tpc);
 struct email_node *find_email(struct email_node *eml, char *sender);
+void get_time_string(char current_time[], int size);
 
 struct email_node *create_email_node(char *configured_name, char *smtp_username, char *smtp_userpass,
 				     char *smtp_ip, int smtp_port, char *sender);
@@ -89,5 +97,6 @@ void llist_add_end(struct topic **list, struct topic *t);
 int ullist_event_add_end(struct topic *t, struct event e);
 void topic_list_remove_all(struct topic **list);
 void event_list_remove_all(struct event_node **list);
+void email_list_remove_all(struct email_node **list);
 
 #endif
